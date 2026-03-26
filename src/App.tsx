@@ -136,7 +136,7 @@ export default function App() {
     setError("");
     setStatus("جاري جلب الفيديو...");
     try {
-      const res = await fetch(`${TIKWM_API}/?url=${encodeURIComponent(videoUrl)}`);
+      const res = await fetch(`${TIKWM_API}?path=&url=${encodeURIComponent(videoUrl)}`);
       const data = await res.json();
       if (!data || data.code !== 0) throw new Error("تعذّر جلب الفيديو.");
       setVideos([data.data]);
