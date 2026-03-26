@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 
-const TIKWM_API = "/api/tikwm";
+const TIKWM_API = "/api/tikwm-proxy";
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -116,7 +116,7 @@ export default function App() {
     setSelected(new Set());
     setStatus(`جاري جلب فيديوهات @${username}...`);
     try {
-      const res = await fetch(`${TIKWM_API}/user/posts?unique_id=${username}&count=35&cursor=0`);
+      const res = await fetch(`${TIKWM_API}?path=user/posts&unique_id=${username}&count=35&cursor=0`);
       const data = await res.json();
       if (!data || data.code !== 0) throw new Error("تعذّر جلب البروفايل. تحقق من اسم المستخدم.");
       const items = data.data?.videos || [];
