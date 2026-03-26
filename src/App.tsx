@@ -25,7 +25,11 @@ const styles = `
   .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,255,198,0.25); }
   .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-danger { background: linear-gradient(135deg, #ff0050, #ff4d00); color: #fff; }
-  .btn-danger:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(255,0,80,0.25); }
+  .btn-danger:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(255,0,80,0.25); }
+  .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-zip { background: linear-gradient(135deg, #a855f7, #6366f1); color: #fff; }
+  .btn-zip:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(168,85,247,0.3); }
+  .btn-zip:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-ghost { background: transparent; color: #666; border: 1px solid #222; }
   .btn-ghost:hover { border-color: #444; color: #aaa; }
   .btn-sm { padding: 8px 16px; font-size: 12px; border-radius: 8px; }
@@ -35,6 +39,7 @@ const styles = `
   .error-bar { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.2); border-radius: 10px; margin-bottom: 24px; font-size: 13px; color: #ff6685; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
   .toolbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .toolbar-right { display: flex; gap: 10px; flex-wrap: wrap; }
   .count-badge { font-family: 'Bebas Neue', cursive; font-size: 28px; letter-spacing: 1px; color: #00ffc6; line-height: 1; }
   .count-label { font-size: 12px; color: #444; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; }
   .selected-info { font-size: 13px; color: #666; padding: 6px 14px; background: #111; border: 1px solid #1e1e1e; border-radius: 20px; }
@@ -70,6 +75,7 @@ const styles = `
   .tip-label { font-size: 12px; color: #333; }
   .progress-bar { height: 3px; background: #1a1a1a; border-radius: 3px; margin-bottom: 20px; overflow: hidden; }
   .progress-fill { height: 100%; background: linear-gradient(90deg, #00ffc6, #00b8ff); border-radius: 3px; transition: width 0.3s; }
+  .progress-fill.zip { background: linear-gradient(90deg, #a855f7, #6366f1); }
   @media (max-width: 600px) {
     .grid, .loading-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .input-row { flex-direction: column; }
@@ -98,6 +104,12 @@ function isSingleVideo(input: string) {
   return input.includes("tiktok.com") && input.includes("/video/");
 }
 
+async function downloadVideoBlob(dlUrl: string): Promise<Blob> {
+  const res = await fetch(`${TIKWM_API}?download_url=${encodeURIComponent(dlUrl)}`);
+  if (!res.ok) throw new Error("فشل التحميل");
+  return await res.blob();
+}
+
 export default function App() {
   const [url, setUrl] = useState("");
   const [videos, setVideos] = useState<any[]>([]);
@@ -106,8 +118,10 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [bulkProgress, setBulkProgress] = useState(0);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState(0);
 
   const fetchProfile = useCallback(async (username: string) => {
     setLoading(true);
@@ -153,24 +167,16 @@ export default function App() {
     const input = url.trim();
     if (!input) return;
     setError("");
-    if (isSingleVideo(input)) {
-      fetchSingle(input);
-    } else {
+    if (isSingleVideo(input)) fetchSingle(input);
+    else {
       const username = parseUsername(input);
-      if (!username) {
-        setError("أدخل رابط بروفايل مثل: tiktok.com/@username أو @username");
-        return;
-      }
+      if (!username) { setError("أدخل رابط بروفايل مثل: tiktok.com/@username أو @username"); return; }
       fetchProfile(username);
     }
   };
 
   const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
   const selectAll = () => {
@@ -184,32 +190,69 @@ export default function App() {
     const id = video.id;
     setDownloading((p) => new Set(p).add(id));
     try {
-      const res = await fetch(`/api/tikwm?download_url=${encodeURIComponent(dlUrl)}`);
-      const blob = await res.blob();
+      const blob = await downloadVideoBlob(dlUrl);
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = `tiktok_${id}.mp4`;
       a.click();
       URL.revokeObjectURL(a.href);
-    } catch {
-      alert("فشل التحميل، جرّب مرة أخرى.");
-    } finally {
-      setDownloading((p) => { const n = new Set(p); n.delete(id); return n; });
-    }
+    } catch { alert("فشل التحميل، جرّب مرة أخرى."); }
+    finally { setDownloading((p) => { const n = new Set(p); n.delete(id); return n; }); }
   };
 
-  const downloadSelected = async () => {
+  const downloadSelectedNormal = async () => {
     const toDownload = videos.filter((v) => selected.has(v.id));
-    if (toDownload.length === 0) return;
+    if (!toDownload.length) return;
     setIsBulkDownloading(true);
-    setDownloadProgress(0);
+    setBulkProgress(0);
     for (let i = 0; i < toDownload.length; i++) {
       await downloadOne(toDownload[i]);
-      setDownloadProgress(Math.round(((i + 1) / toDownload.length) * 100));
-      await new Promise((r) => setTimeout(r, 400));
+      setBulkProgress(Math.round(((i + 1) / toDownload.length) * 100));
+      await new Promise((r) => setTimeout(r, 300));
     }
     setIsBulkDownloading(false);
-    setDownloadProgress(0);
+    setBulkProgress(0);
+  };
+
+  const downloadAsZip = async () => {
+    const toDownload = videos.filter((v) => selected.has(v.id));
+    if (!toDownload.length) return;
+    setIsZipping(true);
+    setZipProgress(0);
+    setStatus("جاري تجهيز ملف ZIP...");
+
+    try {
+      const { default: JSZip } = await import("https://cdn.skypack.dev/jszip" as any);
+      const zip = new JSZip();
+
+      for (let i = 0; i < toDownload.length; i++) {
+        const v = toDownload[i];
+        const dlUrl = v.play || v.wmplay;
+        if (!dlUrl) continue;
+        try {
+          const blob = await downloadVideoBlob(dlUrl);
+          zip.file(`tiktok_${v.id}.mp4`, blob);
+        } catch { /* تخطى الفيديو الفاشل */ }
+        setZipProgress(Math.round(((i + 1) / toDownload.length) * 80));
+      }
+
+      setStatus("جاري ضغط الملفات...");
+      const zipBlob = await zip.generateAsync({ type: "blob" }, (meta: any) => {
+        setZipProgress(80 + Math.round(meta.percent * 0.2));
+      });
+
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(zipBlob);
+      a.download = `tikload_${toDownload.length}_videos.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setStatus(`✅ تم تحميل ${toDownload.length} فيديو في ملف ZIP!`);
+    } catch (e: any) {
+      setError("فشل إنشاء ZIP: " + e.message);
+    } finally {
+      setIsZipping(false);
+      setZipProgress(0);
+    }
   };
 
   return (
@@ -227,14 +270,9 @@ export default function App() {
           <div className="search-box">
             <label className="input-label">رابط البروفايل أو الفيديو</label>
             <div className="input-row">
-              <input
-                className="url-input"
-                placeholder="tiktok.com/@username  أو رابط فيديو مباشر"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                dir="ltr"
-              />
+              <input className="url-input" placeholder="tiktok.com/@username  أو رابط فيديو مباشر"
+                value={url} onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()} dir="ltr" />
               <button className="btn btn-primary" onClick={handleSearch} disabled={loading || !url.trim()}>
                 {loading ? "جاري الجلب..." : "جلب الفيديوهات"}
               </button>
@@ -278,21 +316,36 @@ export default function App() {
                   )}
                 </div>
                 {selected.size > 0 && (
-                  <button className="btn btn-danger" onClick={downloadSelected} disabled={isBulkDownloading}>
-                    {isBulkDownloading ? `جاري التحميل... ${downloadProgress}%` : `⬇ تحميل ${selected.size} فيديو`}
-                  </button>
+                  <div className="toolbar-right">
+                    <button className="btn btn-danger btn-sm" onClick={downloadSelectedNormal}
+                      disabled={isBulkDownloading || isZipping}>
+                      {isBulkDownloading ? `⬇ ${bulkProgress}%` : `⬇ تحميل ${selected.size}`}
+                    </button>
+                    <button className="btn btn-zip btn-sm" onClick={downloadAsZip}
+                      disabled={isBulkDownloading || isZipping}>
+                      {isZipping ? `🗜 ${zipProgress}%` : `🗜 ZIP (${selected.size})`}
+                    </button>
+                  </div>
                 )}
               </div>
+
               {isBulkDownloading && (
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${downloadProgress}%` }} />
+                  <div className="progress-fill" style={{ width: `${bulkProgress}%` }} />
                 </div>
               )}
+              {isZipping && (
+                <div className="progress-bar">
+                  <div className="progress-fill zip" style={{ width: `${zipProgress}%` }} />
+                </div>
+              )}
+
               <div className="grid">
                 {videos.map((v) => (
                   <div key={v.id} className={`card ${selected.has(v.id) ? "selected" : ""}`} onClick={() => toggleSelect(v.id)}>
                     <div className="card-thumb">
-                      <img src={v.cover || v.origin_cover} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      <img src={v.cover || v.origin_cover} alt="" loading="lazy"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                       <div className="check-overlay"><span className="check-icon">✓</span></div>
                     </div>
                     <div className="card-info">
@@ -303,12 +356,9 @@ export default function App() {
                       <div className="card-desc">{v.title || "بدون عنوان"}</div>
                     </div>
                     <div className="dl-btn-wrap">
-                      <button
-                        className="btn btn-primary btn-sm"
-                        style={{ width: "100%" }}
+                      <button className="btn btn-primary btn-sm" style={{ width: "100%" }}
                         onClick={(e) => { e.stopPropagation(); downloadOne(v); }}
-                        disabled={downloading.has(v.id)}
-                      >
+                        disabled={downloading.has(v.id)}>
                         {downloading.has(v.id) ? "⏳ جاري..." : "⬇ تحميل"}
                       </button>
                     </div>
