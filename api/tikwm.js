@@ -5,27 +5,32 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-
-  if (!RAPIDAPI_KEY) {
-    return res.status(500).json({ error: 'RAPIDAPI_KEY not set', code: -1 });
-  }
+  const { endpoint, download_url, ...rest } = req.query;
 
   try {
-    const { endpoint = 'user/posts', ...rest } = req.query;
-    const params = new URLSearchParams(rest).toString();
-    const url = `https://tiktok-scraper7.p.rapidapi.com/${endpoint}${params ? '?' + params : ''}`;
+    // حالة تحميل الفيديو مباشرة
+    if (download_url) {
+      const response = await globalThis.fetch(decodeURIComponent(download_url), {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.tiktok.com/' }
+      });
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
+      const buffer = await response.arrayBuffer();
+      return res.status(200).send(Buffer.from(buffer));
+    }
 
+    // جلب بيانات API
+    const params = new URLSearchParams(rest).toString();
+    const url = `https://tiktok-scraper7.p.rapidapi.com/${endpoint || 'user/posts'}${params ? '?' + params : ''}`;
     const response = await globalThis.fetch(url, {
-      method: 'GET',
       headers: {
         'x-rapidapi-host': 'tiktok-scraper7.p.rapidapi.com',
         'x-rapidapi-key': RAPIDAPI_KEY,
       },
     });
-
     const data = await response.json();
     return res.status(200).json(data);
   } catch (e) {
-    return res.status(500).json({ error: e.message, code: -1 });
+    return res.status(500).json({ error: e.message });
   }
 }
