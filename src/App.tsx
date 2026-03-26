@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 
 const TIKWM_API = "/api/tikwm";
+const DOWNLOAD_API = "/api/download";
+const MAX_DURATION = 5 * 60;
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -25,7 +27,7 @@ const styles = `
   .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,255,198,0.25); }
   .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-danger { background: linear-gradient(135deg, #ff0050, #ff4d00); color: #fff; }
-  .btn-danger:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(255,0,80,0.25); }
+  .btn-danger:hover:not(:disabled) { transform: translateY(-1px); }
   .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-zip { background: linear-gradient(135deg, #a855f7, #6366f1); color: #fff; }
   .btn-zip:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(168,85,247,0.3); }
@@ -36,8 +38,8 @@ const styles = `
   .status-bar { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: #111; border: 1px solid #1e1e1e; border-radius: 10px; margin-bottom: 24px; font-size: 13px; color: #888; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ffc6; animation: pulse 1.5s infinite; flex-shrink: 0; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-  .error-bar { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.2); border-radius: 10px; margin-bottom: 24px; font-size: 13px; color: #ff6685; }
-  .info-bar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; background: rgba(0,255,198,0.04); border: 1px solid rgba(0,255,198,0.1); border-radius: 10px; margin-bottom: 24px; font-size: 13px; color: #00ffc6; }
+  .error-bar { padding: 14px 20px; background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.2); border-radius: 10px; margin-bottom: 24px; font-size: 13px; color: #ff6685; }
+  .info-bar { padding: 12px 20px; background: rgba(0,255,198,0.04); border: 1px solid rgba(0,255,198,0.1); border-radius: 10px; margin-bottom: 24px; font-size: 13px; color: #00ffc6; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
   .toolbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .toolbar-right { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -52,7 +54,7 @@ const styles = `
   .card-thumb { position: relative; aspect-ratio: 9/16; overflow: hidden; background: #1a1a1a; }
   .card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.3s; }
   .card:hover .card-thumb img { transform: scale(1.04); }
-  .duration-badge { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.75); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; backdrop-filter: blur(4px); }
+  .duration-badge { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.75); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
   .check-overlay { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 2px solid #333; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .card.selected .check-overlay { background: #00ffc6; border-color: #00ffc6; }
   .check-icon { color: #000; font-size: 14px; font-weight: 700; opacity: 0; transition: opacity 0.2s; }
@@ -75,10 +77,10 @@ const styles = `
   .tip-tag { font-size: 12px; padding: 5px 12px; background: #111; border: 1px solid #1e1e1e; border-radius: 20px; color: #444; cursor: pointer; transition: all 0.2s; }
   .tip-tag:hover { border-color: #333; color: #777; }
   .tip-label { font-size: 12px; color: #333; }
-  .progress-wrap { margin-bottom: 20px; }
-  .progress-label { font-size: 12px; color: #666; margin-bottom: 8px; }
-  .progress-bar { height: 4px; background: #1a1a1a; border-radius: 4px; overflow: hidden; }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, #00ffc6, #00b8ff); border-radius: 4px; transition: width 0.3s; }
+  .progress-wrap { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+  .progress-label { font-size: 13px; color: #aaa; margin-bottom: 10px; display: flex; justify-content: space-between; }
+  .progress-bar { height: 6px; background: #1a1a1a; border-radius: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #00ffc6, #00b8ff); border-radius: 6px; transition: width 0.4s; }
   .progress-fill.zip { background: linear-gradient(90deg, #a855f7, #6366f1); }
   @media (max-width: 600px) {
     .grid, .loading-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -87,8 +89,6 @@ const styles = `
     .btn { width: 100%; text-align: center; }
   }
 `;
-
-const MAX_DURATION = 5 * 60; // 5 دقائق بالثواني
 
 function formatNum(n: number) {
   if (!n) return "0";
@@ -116,6 +116,12 @@ function isSingleVideo(input: string) {
   return input.includes("tiktok.com") && input.includes("/video/");
 }
 
+async function fetchVideoBlob(dlUrl: string): Promise<Blob> {
+  const res = await fetch(`${DOWNLOAD_API}?url=${encodeURIComponent(dlUrl)}`);
+  if (!res.ok) throw new Error("فشل تحميل الفيديو");
+  return await res.blob();
+}
+
 export default function App() {
   const [url, setUrl] = useState("");
   const [videos, setVideos] = useState<any[]>([]);
@@ -125,8 +131,6 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
-  const [bulkProgress, setBulkProgress] = useState(0);
-  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
   const [zipLabel, setZipLabel] = useState("");
@@ -148,7 +152,7 @@ export default function App() {
       const skip = all.length - filtered.length;
       setVideos(filtered);
       setSkipped(skip);
-      setStatus(`تم جلب ${filtered.length} فيديو من @${username}${skip > 0 ? ` (تم تخطي ${skip} فيديو أطول من 5 دقائق)` : ""}`);
+      setStatus(`تم جلب ${filtered.length} فيديو من @${username}`);
     } catch (e: any) {
       setError(e.message || "حدث خطأ");
       setStatus("");
@@ -166,9 +170,7 @@ export default function App() {
       const data = await res.json();
       if (!data || data.code !== 0) throw new Error("تعذّر جلب الفيديو.");
       const v = data.data;
-      if (v.duration && v.duration > MAX_DURATION) {
-        throw new Error("هذا الفيديو أطول من 5 دقائق ولا يمكن تحميله.");
-      }
+      if (v.duration && v.duration > MAX_DURATION) throw new Error("هذا الفيديو أطول من 5 دقائق.");
       setVideos([v]);
       setStatus("تم جلب الفيديو بنجاح!");
     } catch (e: any) {
@@ -200,92 +202,80 @@ export default function App() {
     else setSelected(new Set(videos.map((v) => v.id)));
   };
 
+  // تحميل فيديو واحد كـ blob وحفظه مباشرة
   const downloadOne = async (video: any) => {
     const dlUrl = video.play || video.wmplay;
     if (!dlUrl) return;
     const id = video.id;
     setDownloading((p) => new Set(p).add(id));
     try {
+      const blob = await fetchVideoBlob(dlUrl);
       const a = document.createElement("a");
-      a.href = dlUrl;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
+      a.href = URL.createObjectURL(blob);
+      a.download = `tiktok_${id}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    } catch {
+      setError("فشل تحميل الفيديو، جرّب مرة أخرى.");
     } finally {
-      setTimeout(() => {
-        setDownloading((p) => { const n = new Set(p); n.delete(id); return n; });
-      }, 1500);
+      setDownloading((p) => { const n = new Set(p); n.delete(id); return n; });
     }
   };
 
-  const downloadSelectedNormal = async () => {
-    const toDownload = videos.filter((v) => selected.has(v.id));
-    if (!toDownload.length) return;
-    setIsBulkDownloading(true);
-    setBulkProgress(0);
-    for (let i = 0; i < toDownload.length; i++) {
-      await downloadOne(toDownload[i]);
-      setBulkProgress(Math.round(((i + 1) / toDownload.length) * 100));
-      await new Promise((r) => setTimeout(r, 800));
-    }
-    setIsBulkDownloading(false);
-    setBulkProgress(0);
-  };
-
+  // تحميل كل المحدد في ZIP واحد
   const downloadAsZip = async () => {
     const toDownload = videos.filter((v) => selected.has(v.id));
     if (!toDownload.length) return;
+
     setIsZipping(true);
     setZipProgress(0);
-    setZipLabel("جاري تحميل الفيديوهات...");
+    setError("");
 
     try {
-      // تحميل JSZip من CDN
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-      document.head.appendChild(script);
-      await new Promise((resolve, reject) => {
-        script.onload = resolve;
-        script.onerror = reject;
-      });
+      // تحميل JSZip
+      if (!(window as any).JSZip) {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+        document.head.appendChild(script);
+        await new Promise((res, rej) => { script.onload = res; script.onerror = rej; });
+      }
 
       const JSZip = (window as any).JSZip;
       const zip = new JSZip();
       let done = 0;
+      let failed = 0;
 
       for (const v of toDownload) {
         const dlUrl = v.play || v.wmplay;
-        if (!dlUrl) { done++; continue; }
+        setZipLabel(`⬇ جاري تحميل ${done + 1} من ${toDownload.length}...`);
         try {
-          setZipLabel(`جاري تحميل ${done + 1} من ${toDownload.length}...`);
-          const response = await fetch(dlUrl);
-          if (!response.ok) throw new Error("فشل");
-          const blob = await response.blob();
+          const blob = await fetchVideoBlob(dlUrl);
           zip.file(`tiktok_${v.id}.mp4`, blob);
         } catch {
-          // تخطي الفيديو الفاشل
+          failed++;
         }
         done++;
-        setZipProgress(Math.round((done / toDownload.length) * 80));
+        setZipProgress(Math.round((done / toDownload.length) * 75));
       }
 
-      setZipLabel("جاري ضغط الملفات...");
+      setZipLabel("🗜 جاري ضغط الملفات...");
       const zipBlob = await zip.generateAsync(
         { type: "blob", compression: "DEFLATE", compressionOptions: { level: 1 } },
-        (meta: any) => { setZipProgress(80 + Math.round(meta.percent * 0.2)); }
+        (meta: any) => { setZipProgress(75 + Math.round(meta.percent * 0.25)); }
       );
 
+      const success = toDownload.length - failed;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(zipBlob);
-      a.download = `tikload_${toDownload.length}_videos.zip`;
+      a.download = `tikload_${success}_videos.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
 
-      setStatus(`✅ تم تحميل ${toDownload.length} فيديو في ملف ZIP بنجاح!`);
+      setStatus(`✅ تم تجميع ${success} فيديو في ملف ZIP بنجاح!${failed > 0 ? ` (فشل ${failed})` : ""}`);
     } catch (e: any) {
       setError("فشل إنشاء ZIP: " + e.message);
     } finally {
@@ -299,8 +289,7 @@ export default function App() {
     <>
       <style>{styles}</style>
       <div className="app">
-        <div className="bg-glow" />
-        <div className="bg-glow2" />
+        <div className="bg-glow" /><div className="bg-glow2" />
         <div className="container">
           <div className="header">
             <div className="logo">TIKLOAD</div>
@@ -328,6 +317,18 @@ export default function App() {
           {error && <div className="error-bar">⚠ {error}</div>}
           {status && !error && <div className="status-bar"><div className="status-dot" />{status}</div>}
           {skipped > 0 && <div className="info-bar">ℹ تم تخطي {skipped} فيديو أطول من 5 دقائق تلقائياً</div>}
+
+          {isZipping && (
+            <div className="progress-wrap">
+              <div className="progress-label">
+                <span>{zipLabel}</span>
+                <span>{zipProgress}%</span>
+              </div>
+              <div className="progress-bar">
+                <div className="progress-fill zip" style={{ width: `${zipProgress}%` }} />
+              </div>
+            </div>
+          )}
 
           {loading && (
             <div className="loading-grid">
@@ -358,30 +359,12 @@ export default function App() {
                 </div>
                 {selected.size > 0 && (
                   <div className="toolbar-right">
-                    <button className="btn btn-danger btn-sm" onClick={downloadSelectedNormal}
-                      disabled={isBulkDownloading || isZipping}>
-                      {isBulkDownloading ? `⬇ ${bulkProgress}%` : `⬇ تحميل (${selected.size})`}
-                    </button>
-                    <button className="btn btn-zip btn-sm" onClick={downloadAsZip}
-                      disabled={isBulkDownloading || isZipping}>
-                      {isZipping ? `🗜 ${zipProgress}%` : `🗜 ZIP (${selected.size})`}
+                    <button className="btn btn-zip btn-sm" onClick={downloadAsZip} disabled={isZipping}>
+                      {isZipping ? `🗜 ${zipProgress}%` : `🗜 تحميل ZIP (${selected.size})`}
                     </button>
                   </div>
                 )}
               </div>
-
-              {isBulkDownloading && (
-                <div className="progress-wrap">
-                  <div className="progress-label">جاري التحميل... {bulkProgress}%</div>
-                  <div className="progress-bar"><div className="progress-fill" style={{ width: `${bulkProgress}%` }} /></div>
-                </div>
-              )}
-              {isZipping && (
-                <div className="progress-wrap">
-                  <div className="progress-label">{zipLabel} {zipProgress}%</div>
-                  <div className="progress-bar"><div className="progress-fill zip" style={{ width: `${zipProgress}%` }} /></div>
-                </div>
-              )}
 
               <div className="grid">
                 {videos.map((v) => (
@@ -389,9 +372,7 @@ export default function App() {
                     <div className="card-thumb">
                       <img src={v.cover || v.origin_cover} alt="" loading="lazy"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                      {v.duration && (
-                        <div className="duration-badge">{formatDuration(v.duration)}</div>
-                      )}
+                      {v.duration && <div className="duration-badge">{formatDuration(v.duration)}</div>}
                       <div className="check-overlay"><span className="check-icon">✓</span></div>
                     </div>
                     <div className="card-info">
@@ -404,7 +385,7 @@ export default function App() {
                     <div className="dl-btn-wrap">
                       <button className="btn btn-primary btn-sm" style={{ width: "100%" }}
                         onClick={(e) => { e.stopPropagation(); downloadOne(v); }}
-                        disabled={downloading.has(v.id)}>
+                        disabled={downloading.has(v.id) || isZipping}>
                         {downloading.has(v.id) ? "⏳ جاري..." : "⬇ تحميل"}
                       </button>
                     </div>
