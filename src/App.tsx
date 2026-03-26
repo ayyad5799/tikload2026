@@ -184,7 +184,7 @@ export default function App() {
     const id = video.id;
     setDownloading((p) => new Set(p).add(id));
     try {
-      const res = await fetch(dlUrl);
+      const res = await fetch(`/api/tikwm?download_url=${encodeURIComponent(dlUrl)}`);
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
